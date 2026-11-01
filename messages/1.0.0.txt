@@ -1,0 +1,7 @@
+Tabletop Simulator Editor 1.0.0
+===============================
+
+First release: Get Lua Scripts, Save & Play (open files or whole folder), Execute
+Selection in Global, TTS output panel, save id check in both directions, history
+of pushed files, listener modes, file interface for automation tools and AI
+assistants. See the README for details.

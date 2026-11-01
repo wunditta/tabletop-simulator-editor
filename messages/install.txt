@@ -1,1 +1,21 @@
+Tabletop Simulator Editor
+=========================
 
+Edit the Lua scripts and the XML UI of a Tabletop Simulator save in Sublime Text,
+through the game's External Editor API - nothing else has to run.
+
+Getting started
+---------------
+1. Start Tabletop Simulator and load the save you want to work on.
+2. In Sublime Text create a project for it: add an empty folder for the scripts
+   (Project > Add Folder to Project, then Project > Save Project As).
+3. Tools > Tabletop Simulator > Get Lua Scripts - the scripts land in that folder
+   (Global.-1.lua, Global.-1.xml, <Name>.<GUID>.lua) and Global.-1.lua opens.
+4. Edit, then Tools > Tabletop Simulator > Save & Play (Ctrl+Alt+S or Ctrl+B) -
+   TTS reloads the save with your scripts. Print output and Lua errors show in
+   the TTS output panel.
+
+Settings: Preferences > Package Settings > Tabletop Simulator Editor, or per
+project in the .sublime-project file. The README (same menu) explains the
+save id, the history, the listener and the file interface for other programs:
+https://github.com/wunditta/sublime-tabletop-simulator-editor
