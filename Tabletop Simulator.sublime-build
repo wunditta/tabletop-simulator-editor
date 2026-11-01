@@ -1,0 +1,4 @@
+{
+    "target": "tts_save_and_play",
+    "selector": "source.lua, text.xml"
+}

@@ -1,0 +1,71 @@
+{
+    // These are the general settings for all TTS Editor projects
+    // Every setting here can be overridden per project in the .sublime-project file:
+    // e.g. "settings": { "tts_editor": { "listener": "always", "history": true } }
+    // Open it with Project > Edit Project
+
+    // Local folder for the downloaded TTS scripts. Naming is: <Name>.<GUID>.lua
+    // The Global.-1.lua and Global.-1.xml always sit here, for object scripts see next option.
+    // Empty = the first folder of the project's "folders" list (the top one in the side bar).
+    // A relative path is taken from the folder holding the project file.
+    "script_folder": "",
+
+    // Subfolder of script_folder holding the object scripts. Empty = together with Global.
+    // Other subfolders of the script folder are ignored for pushing to TTS.
+    "objects_subfolder": "",
+
+    // The listener is a python program running in the background for communication with TTS.
+    // It receives what TTS sends on port 39998: scripts (Get), print output, Lua errors.
+    // The following values are possible:
+    //   "on_demand": runs only when needed for Get, Save & Play and Execute and exits after listener_grace_seconds
+    //   "first_use": starts with the first Get, Save & Play, Execute or manual start and then runs until Sublime Text closes
+    //   "always":    runs while Sublime Text is open (print output while playing; blocks the port for other TTS tools)
+    "listener": "on_demand",
+    // For "on_demand" the time the listener runs on after a push or Execute (to get error messages and show them in
+    // Sublime). 0 = it stops as soon as nothing is expected any more (the answer to a Get is always waited for).
+    "listener_grace_seconds": 30,
+
+    // TTS does not provide any means to check which file is currently open. In order to check if the correct file
+    // is loaded, into which the scripts are pushed, a unique ID is used. With this option a unique ID is added/kept
+    // in Global.-1.lua (as comment in first or last line) upon first download (in fact every download and added if not present).
+    // When pushing to TTS the IDs in the local file and in TTS are compared and if they do not match a warning
+    // dialog is shown. Confirming it will push the script and update/add the ID to Global.-1.lua.
+    // The same check runs the other way round on Get, before the downloaded scripts overwrite the project's files.
+    // If those dialogs are confirmed the overwritten scripts are saved with "-Overwritten" attached to their file names.
+    // Possible values:
+    //    true/"last": The ID line is put as last line. The ID is added upon first download (get).
+    //    "first": Like above, but the ID line is placed as first line
+    //    false: No ID is added to the file and no confirmation dialog is shown
+    // Note: An ID line is looked up first at the specified position, but found anywhere in the file (and left as is).
+    "save_id": true,
+
+    // What Save & Play pushes:
+    //   "open":   the open script files of the project window (Global.-1.lua, Global.-1.xml, <Name>.<GUID>.lua)
+    //   "folder": all script files of the script folder (also files of objects currently not in the scene - TTS ignores those)
+    // Note: TTS requires to push the corresponding Lua script and the UI XML at the same time (otherwise it would be removed in TTS).
+    "push": "open",
+    // If true all pushed files are automatically saved before, otherwise a confirmation dialog comes up
+    "save_before_push": false,
+    // After a push TTS reloads and reports the scripts it now runs; they are compared with what was sent. If true a
+    // dialog reports scripts TTS did not take (their objects are not loose in the scene) or runs differently;
+    // the result always goes to the TTS output panel. "Don't show again" in that dialog sets this to false.
+    "report_push_result": true,
+
+    // Copy every pushed file to <script folder>/_history/<yyyy-mm-dd hh-mm-ss>/
+    "history": false,
+    // Number of history folders kept: the oldest beyond this number are deleted at the next push; null = keep everything
+    "history_keep": null,
+
+    // Ask before Get overwrites the script files
+    "confirm_get": true,
+
+    // Bring the TTS output panel to the front whenever a line arrives. If false, Lua errors reported by TTS
+    // (e.g. after a push, while the listener still runs) are shown in a dialog instead, so they are not missed.
+    "show_panel_on_output": true,
+
+    // File interface for external programs (build scripts, an AI assistant, ...) while Sublime has the project open:
+    // command files dropped into <script folder>/<file_interface_folder>/outbox/ are carried out, the TTS output is
+    // mirrored into <file_interface_folder>/log.txt. The commands and the folder layout are described in the README.
+    "file_interface": false,
+    "file_interface_folder": "_bridge",
+}

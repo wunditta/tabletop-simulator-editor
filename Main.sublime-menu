@@ -1,0 +1,98 @@
+[
+    {
+        "id": "tools",
+        "children": [
+            {
+                "caption": "Tabletop Simulator",
+                "id": "tts-editor",
+                "children": [
+                    {
+                        "caption": "Get Lua Scripts",
+                        "command": "tts_get_scripts"
+                    },
+                    {
+                        "caption": "Save & Play",
+                        "command": "tts_save_and_play"
+                    },
+                    {
+                        "caption": "Save & Play (whole folder)",
+                        "command": "tts_save_and_play",
+                        "args": {
+                            "mode": "folder"
+                        }
+                    },
+                    {
+                        "caption": "-"
+                    },
+                    {
+                        "caption": "Execute Selection in Global",
+                        "command": "tts_execute"
+                    },
+                    {
+                        "caption": "Show TTS Output",
+                        "command": "tts_show_panel"
+                    },
+                    {
+                        "command": "tts_listener"
+                    },
+                    {
+                        "caption": "-"
+                    },
+                    {
+                        "caption": "Settings",
+                        "command": "edit_settings",
+                        "args": {
+                            "base_file": "${packages}/Tabletop Simulator Editor/Tabletop Simulator Editor.sublime-settings",
+                            "default": "{\n\t$0\n}\n"
+                        }
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        "caption": "Preferences",
+        "mnemonic": "n",
+        "id": "preferences",
+        "children": [
+            {
+                "caption": "Package Settings",
+                "mnemonic": "P",
+                "id": "package-settings",
+                "children": [
+                    {
+                        "caption": "Tabletop Simulator Editor",
+                        "children": [
+                            {
+                                "caption": "Settings",
+                                "command": "edit_settings",
+                                "args": {
+                                    "base_file": "${packages}/Tabletop Simulator Editor/Tabletop Simulator Editor.sublime-settings",
+                                    "default": "{\n\t$0\n}\n"
+                                }
+                            },
+                            {
+                                "caption": "Key Bindings",
+                                "command": "edit_settings",
+                                "args": {
+                                    "base_file": "${packages}/Tabletop Simulator Editor/Default ($platform).sublime-keymap",
+                                    "default": "[\n\t$0\n]\n"
+                                }
+                            },
+                            {
+                                "caption": "-"
+                            },
+                            {
+                                "caption": "README",
+                                "command": "open_file",
+                                "args": {
+                                    "file": "${packages}/Tabletop Simulator Editor/README.md"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+]

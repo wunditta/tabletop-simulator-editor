@@ -1,0 +1,11 @@
+[
+    { "caption": "Tabletop Simulator: Get Lua Scripts", "command": "tts_get_scripts" },
+    { "caption": "Tabletop Simulator: Save & Play", "command": "tts_save_and_play" },
+    { "caption": "Tabletop Simulator: Save & Play (whole folder)", "command": "tts_save_and_play", "args": {"mode": "folder"} },
+    { "caption": "Tabletop Simulator: Execute Selection in Global", "command": "tts_execute" },
+    { "caption": "Tabletop Simulator: Show Output", "command": "tts_show_panel" },
+    { "caption": "Tabletop Simulator: Start Listener", "command": "tts_listener", "args": {"action": "start"} },
+    { "caption": "Tabletop Simulator: Stop Listener", "command": "tts_listener", "args": {"action": "stop"} },
+    { "caption": "Preferences: Tabletop Simulator Editor Settings", "command": "edit_settings",
+      "args": { "base_file": "${packages}/Tabletop Simulator Editor/Tabletop Simulator Editor.sublime-settings", "default": "{\n\t$0\n}\n" } }
+]
