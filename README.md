@@ -210,4 +210,4 @@ By hand: copy this repository into a folder `Tabletop Simulator Editor` inside S
 
 ## License
 
-GNU General Public License v3.0 or later - see LICENSE. Issues and suggestions: https://github.com/wunditta/sublime-tabletop-simulator-editor/issues
+GNU General Public License v3.0 or later - see LICENSE. Issues and suggestions: https://github.com/wunditta/tabletop-simulator-editor/issues

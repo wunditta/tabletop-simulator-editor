@@ -18,4 +18,4 @@ Getting started
 Settings: Preferences > Package Settings > Tabletop Simulator Editor, or per
 project in the .sublime-project file. The README (same menu) explains the
 save id, the history, the listener and the file interface for other programs:
-https://github.com/wunditta/sublime-tabletop-simulator-editor
+https://github.com/wunditta/tabletop-simulator-editor

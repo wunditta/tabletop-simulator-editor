@@ -1,7 +1,7 @@
 """
 Tabletop Simulator Editor - the TTS External Editor API for Sublime Text 3 and 4.
 
-Copyright (C) 2026 wunditta (https://github.com/wunditta/sublime-tabletop-simulator-editor)
+Copyright (C) 2026 wunditta (https://github.com/wunditta/tabletop-simulator-editor)
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
 License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later
