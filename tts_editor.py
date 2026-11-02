@@ -33,13 +33,13 @@ import threading
 import time
 import uuid
 
-TTS_PORT = 39999
-LISTEN_PORT = 39998
+TTS_PORT = 39999          # TTS listens here (defaults; "send_port" / "listen_port" override them)
+LISTEN_PORT = 39998       # TTS sends here
 SETTINGS_FILE = "Tabletop Simulator Editor.sublime-settings"
 PANEL = "tts"
 GLOBAL_LUA = "Global.-1.lua"
 GLOBAL_XML = "Global.-1.xml"
-OBJECT_RE = re.compile(r"^(.+)\.([0-9a-fA-F]{6})\.lua$")
+OBJECT_RE = re.compile(r"^(.+)\.([0-9a-fA-F]{6})\.(lua|xml)$")
 ID_RE = re.compile(r"tts-editor-id:[ \t]*([\w-]+)")
 ID_LINE = "-- Sublime TTS Editor - Unique ID to prevent pushing to wrong TTS mod - tts-editor-id: %s"
 HISTORY_DIR = "_history"
@@ -60,7 +60,20 @@ DEFAULTS = {
     "show_panel_on_output": True,
     "file_interface": False,
     "file_interface_folder": "_bridge",
+    "send_port": None,
+    "listen_port": None,
+    "log_max_kb": 1024,
+    "log": False,
+    "log_folder": "",
 }
+
+
+def port(window, key, default):
+    v = setting(window, key)
+    try:
+        return int(v) if v else default
+    except (TypeError, ValueError):
+        return default
 
 _listener = None           # Listener thread
 _deadline = 0.0            # on_demand: when the listener may stop
@@ -147,6 +160,15 @@ def log(tag, text):
         line = "[%s] %-6s %s\n" % (time.strftime("%H:%M:%S"), tag, text)
         for lf in list(_logfiles):            # file interface: the same line into its log file
             try:
+                cap = setting(window, "log_max_kb")
+                if isinstance(cap, (int, float)) and cap > 0 and os.path.isfile(lf) and os.path.getsize(lf) > cap * 1024:
+                    old = os.path.splitext(lf)[0] + ".1.txt"      # log.txt -> log.1.txt (one generation kept)
+                    if os.path.exists(old):
+                        os.remove(old)
+                    os.rename(lf, old)
+                d = os.path.dirname(lf)
+                if d and not os.path.isdir(d):
+                    os.makedirs(d)
                 with open(lf, "ab") as f:
                     f.write(line.encode("utf-8"))
             except (IOError, OSError):
@@ -154,12 +176,21 @@ def log(tag, text):
         panel.set_read_only(False)
         panel.run_command("append", {"characters": line, "scroll_to_end": True})
         panel.set_read_only(True)
-        if setting(window, "show_panel_on_output"):
+        show = setting(window, "show_panel_on_output")
+        if show:
             window.run_command("show_panel", {"panel": "output." + PANEL})
+            if isinstance(show, (int, float)) and not isinstance(show, bool) and show > 0:
+                _hide_at[0] = time.time() + show        # a number: hide again that many seconds after the last line
+
+                def hide():
+                    if time.time() >= _hide_at[0] - 0.05 and window.active_panel() == "output." + PANEL:
+                        window.run_command("hide_panel", {"panel": "output." + PANEL})
+                sublime.set_timeout(hide, int(show * 1000) + 100)
     sublime.set_timeout(do, 0)
 
 
 _errors = []               # Lua errors collected for one dialog when the panel is not shown automatically
+_hide_at = [0.0]           # show_panel_on_output as a number: when the panel may be hidden again
 
 
 def report_error(err):
@@ -184,14 +215,14 @@ def send(payload):
     """One JSON message to TTS. True when delivered."""
     data = json.dumps(payload).encode("utf-8")
     try:
-        sock = socket.create_connection(("127.0.0.1", TTS_PORT), timeout=3)
+        sock = socket.create_connection(("127.0.0.1", port(sublime.active_window(), "send_port", TTS_PORT)), timeout=3)
         try:
             sock.sendall(data)
         finally:
             sock.close()
         return True
     except (socket.error, OSError) as e:
-        msg = "cannot reach Tabletop Simulator on port %d - is the game running with a save loaded? (%s)" % (TTS_PORT, e)
+        msg = "cannot reach Tabletop Simulator on port %d - is the game running with a save loaded? (%s)" % (port(sublime.active_window(), "send_port", TTS_PORT), e)
         log("ERR", msg)
         sublime.error_message("Tabletop Simulator Editor: " + msg)
         return False
@@ -224,24 +255,24 @@ def save_incoming_scripts(states, window):
         return
     objdir = base if hist else objects_folder(window, base)
     where = id_mode(window)
-    if not hist and where is not None:
-        # the reverse check: does the loaded TTS file belong to this project? Otherwise a Get would overwrite the wrong scripts
+    if not hist:
         local = os.path.join(base, GLOBAL_LUA)
-        received = next((s.get("script") or "" for s in states if str(s.get("guid", "")) == "-1"), "")
-        loaded_id, project_id = text_id(received), file_id(local)
-        if os.path.isfile(local) and loaded_id != project_id:
-            text = (QUESTION_GET + "\n\nLoaded file: %s\nThis project: %s" % (loaded_id or "no id yet", project_id or "no id yet"))
-            dest = None
-            if setting(window, "history"):
-                dest = history_folder(base)
-                text += ("\n\nBackups of the project's scripts, which will be overwritten, are saved to folder \"%s\\%s\" with \"-Overwritten\" at the end of their file names."
-                         % (HISTORY_DIR, os.path.basename(dest)))
-            text += "\n\nGo ahead and overwrite?"
-            if not sublime.ok_cancel_dialog(text, "Overwrite"):
-                log("INFO", "Get cancelled - id %s loaded, project has %s; nothing written" % (loaded_id or "none", project_id or "none"))
-                return
-            if dest:
-                write_history(window, folder_script_files(window), dest, "-Overwritten")
+        existing = folder_script_files(window)
+        dest = history_folder(base) if (setting(window, "history") and existing) else None
+        if where is not None and os.path.isfile(local):
+            # the reverse check: does the loaded TTS file belong to this project? Otherwise a Get would overwrite the wrong scripts
+            received = next((s.get("script") or "" for s in states if str(s.get("guid", "")) == "-1"), "")
+            loaded_id, project_id = text_id(received), file_id(local)
+            if loaded_id != project_id:
+                text = (QUESTION_GET + "\n\nLoaded file: %s\nThis project: %s" % (loaded_id or "no id yet", project_id or "no id yet"))
+                if dest:
+                    text += "\n\nThe replaced scripts are saved to \"%s\\%s\"." % (HISTORY_DIR, os.path.basename(dest))
+                text += "\n\nGo ahead and overwrite?"
+                if not sublime.ok_cancel_dialog(text, "Overwrite"):
+                    log("INFO", "Get cancelled - id %s loaded, project has %s; nothing written" % (loaded_id or "none", project_id or "none"))
+                    return
+        if dest:
+            write_history(window, existing, dest)      # history = the state being replaced
     count, known = 0, {}
     for s in states:
         guid, name = str(s.get("guid", "")), str(s.get("name", ""))
@@ -252,10 +283,12 @@ def save_incoming_scripts(states, window):
                 write_text(os.path.join(base, "Global.-1%s.xml" % suffix), s.get("ui") or "")
             count += 1
         else:
-            script = s.get("script") or ""
-            if not script.strip():
-                continue                     # unscripted object
+            script, ui = s.get("script") or "", s.get("ui") or ""
+            if not script.strip() and not ui.strip():
+                continue                     # object without script and UI
             write_text(os.path.join(objdir, "%s.%s%s.lua" % (safe_name(name), guid, suffix)), script)
+            if ui.strip():
+                write_text(os.path.join(objdir, "%s.%s%s.xml" % (safe_name(name), guid, suffix)), ui)
             count += 1
     if not suffix:
         _known_guids = known
@@ -321,19 +354,20 @@ class Listener(threading.Thread):
 
     def run(self):
         sock = self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        lport = port(sublime.active_window(), "listen_port", LISTEN_PORT)
         try:
             if os.name != "nt":          # lets the port be reused while old connections linger; on Windows it would allow a second binder
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            sock.bind(("127.0.0.1", LISTEN_PORT))
+            sock.bind(("127.0.0.1", lport))
             sock.listen(5)
             sock.settimeout(0.5)
         except (socket.error, OSError) as e:
             self.error = str(e)
             self.ready.set()
-            log("ERR", "cannot listen on port %d - another TTS editor tool is running? (%s)" % (LISTEN_PORT, e))
+            log("ERR", "cannot listen on port %d - another TTS editor tool is running? (%s)" % (lport, e))
             return
         self.ready.set()
-        log("INFO", "listening for Tabletop Simulator on port %d" % LISTEN_PORT)
+        log("INFO", "listening for Tabletop Simulator on port %d" % lport)
         while not self.stop_flag:
             try:
                 client, _ = sock.accept()
@@ -486,29 +520,53 @@ def folder_script_files(window):
     objdir = objects_folder(window, base)
     if os.path.isdir(objdir):
         for fn in sorted(os.listdir(objdir)):
-            if OBJECT_RE.match(fn):
+            if OBJECT_RE.match(fn) and os.path.isfile(os.path.join(objdir, fn)):
                 files.append(os.path.join(objdir, fn))
     return files
 
 
+def partner_file(path):
+    """The other file of a Lua/XML pair (Global.-1.lua <-> Global.-1.xml, <Name>.<GUID>.lua <-> .xml), existing or not."""
+    root, ext = os.path.splitext(path)
+    return root + (".xml" if ext.lower() == ".lua" else ".lua")
+
+
+def with_partners(files):
+    """The files plus the existing partner of each: script and UI of an object always travel together."""
+    out = list(files)
+    for f in files:
+        p = partner_file(f)
+        if p not in out and os.path.isfile(p):
+            out.append(p)
+    return out
+
+
 def build_states(window, files):
-    """Script states for the files. Global's script and UI always travel together (TTS clears the UI when
-    the Global state has no "ui"), so when either file is among the files, the other is read from disk."""
+    """Script states for the files. Script and UI of an object (Global included) always travel together - TTS clears
+    the part that is not sent - so for each file the partner is read from disk; no .xml file means no UI."""
     base = script_folder(window)
-    states, glob = [], None
+    states, done = [], set()
     for path in files:
         fn = os.path.basename(path)
+        lua = path if fn.lower().endswith(".lua") else partner_file(path)
+        if lua in done:
+            continue
+        done.add(lua)
+        xml = partner_file(lua)
         if fn in (GLOBAL_LUA, GLOBAL_XML):
-            if glob is None:
-                glob = {"name": "Global", "guid": "-1", "script": read_text(os.path.join(base, GLOBAL_LUA))}
-                xml = os.path.join(base, GLOBAL_XML)
-                glob["ui"] = read_text(xml) if os.path.isfile(xml) else ""
-                states.insert(0, glob)
+            name, guid, lua = "Global", "-1", os.path.join(base, GLOBAL_LUA)
+            xml = os.path.join(base, GLOBAL_XML)
         else:
             m = OBJECT_RE.match(fn)
-            # every object file is sent: TTS drops a script whose object is not loose in the scene (inside a bag or deck,
-            # or gone) without harm, and filtering by the last Get would miss objects taken out of a bag since
-            states.append({"name": m.group(1), "guid": m.group(2), "script": read_text(path)})
+            name, guid = m.group(1), m.group(2)
+        # every object file is sent: TTS drops a script whose object is not loose in the scene (inside a bag or deck,
+        # or gone) without harm, and filtering by the last Get would miss objects taken out of a bag since
+        st = {"name": name, "guid": guid, "script": read_text(lua) if os.path.isfile(lua) else "",
+              "ui": read_text(xml) if os.path.isfile(xml) else ""}
+        if guid == "-1":
+            states.insert(0, st)
+        else:
+            states.append(st)
     return states
 
 
@@ -568,16 +626,15 @@ def history_folder(base):
     return dest
 
 
-def write_history(window, files, dest=None, suffix=""):
-    """Copies the files into dest (default: a new history folder), suffix before the extension, and applies the retention."""
+def write_history(window, files, dest=None):
+    """Copies the files into dest (default: a new history folder) and applies the kept-count."""
     base = script_folder(window)
     hist = os.path.join(base, HISTORY_DIR)
     dest = dest or history_folder(base)
     if not os.path.isdir(dest):
         os.makedirs(dest)
     for path in files:
-        root, ext = os.path.splitext(os.path.basename(path))
-        shutil.copy2(path, os.path.join(dest, root + suffix + ext))
+        shutil.copy2(path, os.path.join(dest, os.path.basename(path)))
     log("HIST", "%d files copied to %s" % (len(files), os.path.relpath(dest, base)))
     keep = setting(window, "history_keep")
     if isinstance(keep, (int, float)) and keep > 0:
@@ -598,12 +655,11 @@ QUESTION_GET = ("Are you sure the scripts of the currently loaded file in TTS sh
 # ------------------------------------------------------------ file interface --
 # An external program (a build script, an AI assistant, ...) drives TTS by dropping small .json files into
 # <script folder>/<file_interface_folder>/outbox/; the package carries them out and mirrors the TTS output panel
-# into <file_interface_folder>/log.txt. Commands:
+# into <script folder>/<log_folder>/log.txt (the log is on while the interface is on). Commands:
 #   {"cmd": "getScripts"}                       scripts of the loaded save -> <file_interface_folder>/inbox/ (the sources stay untouched)
 #   {"cmd": "saveAndPlay"}                      push every script file of the folder
 #   {"cmd": "exec", "guid": "-1", "script": "..."}   run Lua in Global (or in the object with that GUID)
 #   {"cmd": "custom", "payload": {...}}         a custom message to the mod (onExternalMessage)
-#   {"cmd": "snapshot"}                         copy the script files into a history folder
 
 def interface_windows():
     """(window, interface folder) for every window whose project enables the file interface."""
@@ -622,14 +678,35 @@ def start_poller():
     if _poller_running:
         return
     _poller_running = True
-    sublime.set_timeout(poll_outbox, 500)
+    sublime.set_timeout(poll_outbox, 1000)
+
+
+def log_path(window):
+    """<script folder>/<log_folder>/log.txt of a window, or None when it has no script folder."""
+    base = script_folder(window)
+    if not base:
+        return None
+    sub = setting(window, "log_folder") or ""
+    return os.path.normpath(os.path.join(base, os.path.expandvars(os.path.expanduser(sub)), "log.txt"))
+
+
+def log_files():
+    """The log files to mirror the panel into: one per window with "log" on - or with the file interface on, which
+    needs the log for its answers."""
+    files = set()
+    for w in sublime.windows():
+        if setting(w, "log") or setting(w, "file_interface"):
+            lf = log_path(w)
+            if lf:
+                files.add(lf)
+    return files
 
 
 def poll_outbox():
     global _logfiles
     try:
         wins = interface_windows()
-        _logfiles = set(os.path.join(folder, "log.txt") for _, folder in wins)
+        _logfiles = log_files()
         for w, folder in wins:
             outbox = os.path.join(folder, "outbox")
             if not os.path.isdir(outbox):
@@ -653,7 +730,7 @@ def poll_outbox():
                 except Exception as e:
                     log("ERR", "command %s failed: %s" % (fn, e))
     finally:
-        sublime.set_timeout(poll_outbox, 500)
+        sublime.set_timeout(poll_outbox, 1000)
 
 
 def run_file_command(window, folder, cmd, fn):
@@ -675,12 +752,17 @@ def run_file_command(window, folder, cmd, fn):
         if not states:
             log("WARN", "saveAndPlay: no script files in %s" % script_folder(window))
             return
-        if setting(window, "history"):
-            write_history(window, files)
-        if send({"messageID": 1, "scriptStates": states}):
-            log("PUSH", "Save & Play (file interface): %d scripts, %d chars - save id not checked" % (len(states), sum(len(s["script"]) for s in states)))
-            if ensure_listener(window):
-                expect_push_result(window, states, False)
+
+        def push():
+            if send({"messageID": 1, "scriptStates": states}):
+                log("PUSH", "Save & Play (file interface): %d scripts, %d chars - save id not checked" % (len(states), sum(len(s["script"]) for s in states)))
+                if ensure_listener(window):
+                    expect_push_result(window, states, False)
+        if setting(window, "history") and ensure_listener(window):
+            backup_then(window, script_folder(window), push,
+                        lambda: (log("WARN", "the scripts TTS runs could not be retrieved for the history - pushed without backup"), push()))
+        else:
+            push()
     elif name == "exec":
         script = cmd.get("script") or ""
         ensure_listener(window)
@@ -690,8 +772,6 @@ def run_file_command(window, folder, cmd, fn):
     elif name == "custom":
         if send({"messageID": 2, "customMessage": cmd.get("payload")}):
             log("SEND", "custom message")
-    elif name == "snapshot":
-        write_history(window, folder_script_files(window))
     else:
         log("WARN", "unknown command %r in %s" % (name, fn))
 
@@ -734,6 +814,19 @@ def verify_push(window, sent, states, dialog):
             st.set("report_push_result", False)
             sublime.save_settings(SETTINGS_FILE)
         log("INFO", "push results are no longer reported in a dialog (report_push_result = false)")
+
+
+def backup_then(window, base, then, on_failure):
+    """History: fetch the scripts TTS runs now into a new history folder (the state the push replaces), then call then()."""
+    dest = history_folder(base)
+    _incoming["folder"], _incoming["suffix"] = dest, ""
+    wait_for(1, lambda m: (save_incoming_scripts(m.get("scriptStates") or [], window), then()), 60, on_failure)
+    log("PULL", "requesting the scripts TTS runs now for the history (%s)" % os.path.join(HISTORY_DIR, os.path.basename(dest)))
+    expect_answer(+1)
+    if not send({"messageID": 0}):
+        expect_answer(-1)
+        _waiters[:] = [e for e in _waiters if e[0] != 1]
+        _incoming["folder"], _incoming["suffix"] = None, ""
 
 
 def expect_push_result(window, states, dialog):
@@ -784,7 +877,7 @@ class TtsSaveAndPlayCommand(sublime_plugin.WindowCommand):
                     return
                 for v in dirty:
                     v.run_command("save")
-            files = sorted(set(v.file_name() for v in views))
+            files = with_partners(sorted(set(v.file_name() for v in views)))
             if not files:
                 log("WARN", "no script files are open - nothing to push (open %s or an object script, or set \"push\": \"folder\")" % GLOBAL_LUA)
                 return
@@ -793,7 +886,6 @@ class TtsSaveAndPlayCommand(sublime_plugin.WindowCommand):
             files = folder_script_files(w)
         self.files = files
         self.base = base
-        self.hist_dest = None
         self.global_path = os.path.join(base, GLOBAL_LUA)
 
         listening = ensure_listener(w)
@@ -811,51 +903,45 @@ class TtsSaveAndPlayCommand(sublime_plugin.WindowCommand):
                     _waiters[:] = [e for e in _waiters if e[0] != 4]
                 return
             log("WARN", "save id not checked - nothing can be received (port taken)")
-        self.push()
+        self.proceed()
 
     def no_answer(self, project_id):
         text = ("TTS did not answer the id check (is the game running with a save loaded? see the TTS output panel).\n\n"
                 + QUESTION + "\n\nGo ahead and push?")
         if sublime.ok_cancel_dialog(text, "Push"):
-            self.push()
+            self.proceed()
         else:
             log("INFO", "push cancelled - no answer to the id check")
 
     def check_id(self, project_id, loaded_id):
         loaded_id = str(loaded_id or "")
         if loaded_id == project_id:
-            self.push()
+            self.proceed()
             return
-        history = setting(self.window, "history")
         text = QUESTION + "\n\nLoaded file: %s\nThis project: %s" % (loaded_id or "no id yet", project_id)
-        if history:
-            self.hist_dest = history_folder(self.base)
-            text += ("\n\nBackups of the scripts currently in TTS, which will be overwritten, are saved to folder \"%s\\%s\" with \"-Overwritten\" at the end of their file names."
-                     % (HISTORY_DIR, os.path.basename(self.hist_dest)))
+        if setting(self.window, "history"):
+            text += "\n\nThe scripts TTS runs now are saved to the history folder before they are replaced."
         text += "\n\nGo ahead and push?"
         if not sublime.ok_cancel_dialog(text, "Push"):
             log("INFO", "push cancelled - id %s loaded, project has %s" % (loaded_id or "none", project_id))
             return
-        if history:
-            _incoming["folder"], _incoming["suffix"] = self.hist_dest, "-Overwritten"
-            wait_for(1, lambda m: self.backup_done(m), 60, lambda: self.backup_timeout())
-            log("PULL", "requesting the scripts of the loaded file for the history (-Overwritten)")
-            expect_answer(+1)
-            if not send({"messageID": 0}):
-                expect_answer(-1)
-                _waiters[:] = [e for e in _waiters if e[0] != 1]
-                _incoming["folder"], _incoming["suffix"] = None, ""
-            return
-        self.push()
+        self.proceed()
 
-    def backup_done(self, msg):
-        save_incoming_scripts(msg.get("scriptStates") or [], self.window)
-        self.push()
+    def proceed(self):
+        """History on: the scripts TTS runs now go to a history folder first (the state this push replaces), then push."""
+        if setting(self.window, "history") and listener_running():
+            backup_then(self.window, self.base, self.push, self.backup_timeout)
+        else:
+            if setting(self.window, "history"):
+                log("WARN", "history: the scripts TTS runs could not be retrieved (nothing can be received) - pushed without backup")
+            self.push()
 
     def backup_timeout(self):
         _incoming["folder"], _incoming["suffix"] = None, ""
         if sublime.ok_cancel_dialog("The scripts, currently in TTS, could not be retrieved for backup.\n\nPush anyways?", "Push"):
             self.push()
+        else:
+            log("INFO", "push cancelled - no backup of the scripts TTS runs")
 
     def push(self):
         w = self.window
@@ -863,13 +949,6 @@ class TtsSaveAndPlayCommand(sublime_plugin.WindowCommand):
         if not states:
             log("WARN", "nothing to push")
             return
-        if setting(w, "history"):
-            hist_files = list(self.files)       # Global's lua and xml are pushed together, so both go into the history
-            for fn in (GLOBAL_LUA, GLOBAL_XML):
-                p = os.path.join(self.base, fn)
-                if states[0]["guid"] == "-1" and p not in hist_files and os.path.isfile(p):
-                    hist_files.append(p)
-            write_history(w, hist_files, self.hist_dest)
         total = sum(len(s["script"]) for s in states)
         if send({"messageID": 1, "scriptStates": states}):
             log("PUSH", "Save & Play: %d scripts, %d chars (%s)" % (len(states), total, ", ".join(os.path.basename(f) for f in self.files)))

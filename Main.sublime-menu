@@ -15,7 +15,7 @@
                         "command": "tts_save_and_play"
                     },
                     {
-                        "caption": "Save & Play (whole folder)",
+                        "caption": "Save & Play (all scripts)",
                         "command": "tts_save_and_play",
                         "args": {
                             "mode": "folder"

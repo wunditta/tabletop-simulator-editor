@@ -51,7 +51,8 @@
     // the result always goes to the TTS output panel. "Don't show again" in that dialog sets this to false.
     "report_push_result": true,
 
-    // Copy every pushed file to <script folder>/_history/<yyyy-mm-dd hh-mm-ss>/
+    // Keep the replaced state in <script folder>/_history/<yyyy-mm-dd hh-mm-ss>/: before a push the scripts TTS runs
+    // now are fetched and saved there, before a Get the project's current script files are saved there.
     "history": false,
     // Number of history folders kept: the oldest beyond this number are deleted at the next push; null = keep everything
     "history_keep": null,
@@ -59,13 +60,28 @@
     // Ask before Get overwrites the script files
     "confirm_get": true,
 
-    // Bring the TTS output panel to the front whenever a line arrives. If false, Lua errors reported by TTS
-    // (e.g. after a push, while the listener still runs) are shown in a dialog instead, so they are not missed.
+    // Bring the TTS output panel to the front whenever a line arrives. A number: the same, but the panel is hidden
+    // again that many seconds after the last line. If false, Lua errors reported by TTS (e.g. after a push, while the
+    // listener still runs) are shown in a dialog instead, so they are not missed.
     "show_panel_on_output": true,
 
     // File interface for external programs (build scripts, an AI assistant, ...) while Sublime has the project open:
-    // command files dropped into <script folder>/<file_interface_folder>/outbox/ are carried out, the TTS output is
-    // mirrored into <file_interface_folder>/log.txt. The commands and the folder layout are described in the README.
+    // command files dropped into <script folder>/<file_interface_folder>/outbox/ are carried out (checked once a
+    // second), the TTS output is mirrored into log.txt (see "log_folder"). The commands and the folder layout are described in the README.
     "file_interface": false,
     "file_interface_folder": "_bridge",
+    // Write the TTS output panel's lines to <script folder>/<log_folder>/log.txt as well. The file only receives what
+    // the panel receives, so TTS output while playing needs the listener running ("first_use" or "always").
+    // The file interface (below) needs the log for its answers and turns it on regardless of this setting.
+    "log": false,
+    // Subfolder of the script folder for log.txt; empty = the script folder itself
+    "log_folder": "",
+    // Size cap in KB for log.txt: when exceeded it is renamed to log.1.txt (the previous one is replaced) and a new
+    // one starts; null = never
+    "log_max_kb": 1024,
+
+    // Ports of the External Editor API, in case TTS ever changes them: the package sends to send_port (TTS listens
+    // there, 39999) and listens on listen_port (TTS sends there, 39998). null = these defaults.
+    "send_port": null,
+    "listen_port": null,
 }

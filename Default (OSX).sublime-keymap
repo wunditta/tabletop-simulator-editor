@@ -1,5 +1,5 @@
 [
     { "keys": ["super+alt+s"], "command": "tts_save_and_play" },
-    { "keys": ["super+alt+space"], "command": "tts_get_scripts" },
+    { "keys": ["super+alt+g"], "command": "tts_get_scripts" },
     { "keys": ["super+alt+e"], "command": "tts_execute" }
 ]
