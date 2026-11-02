@@ -1,0 +1,8 @@
+{
+    "$schema": "sublime://packagecontrol.io/schemas/repository",
+    "schema_version": "4.0.0",
+    "packages": [
+        "https://github.com/wunditta"
+    ],
+    "libraries": []
+}
