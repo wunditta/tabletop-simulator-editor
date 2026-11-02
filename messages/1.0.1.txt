@@ -1,0 +1,6 @@
+Tabletop Simulator Editor 1.0.1
+===============================
+
+* The listener survives a reload of the plugin (a package update, a saved package file) without leaving
+  a thread behind that holds port 39998: the new instance stops it and takes over the port. A failed bind
+  is retried once.

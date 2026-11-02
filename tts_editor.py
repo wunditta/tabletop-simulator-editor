@@ -425,8 +425,24 @@ class Listener(threading.Thread):
             log("ERR", "while handling a message: %s" % e)
 
 
+# The running listener is also registered on the sublime module, which survives a reload of this plugin: a reload (an update of the
+# package, a saved package file) must not leave a listener thread behind that still holds the port while the new module cannot bind.
+_REGISTRY = "_tts_editor_listener"
+
+
 def listener_running():
     return _listener is not None and _listener.is_alive() and not _listener.error
+
+
+def stop_orphan():
+    """Stops a listener started by an earlier instance of this module, if one is still alive."""
+    old = getattr(sublime, _REGISTRY, None)
+    if old is not None and old is not _listener:
+        try:
+            old.stop()
+        except Exception:
+            pass
+    setattr(sublime, _REGISTRY, None)
 
 
 def start_listener():
@@ -434,9 +450,18 @@ def start_listener():
     if listener_running():
         return True
     stop_listener()
+    stop_orphan()
     _listener = Listener()
     _listener.start()
     _listener.ready.wait(2)
+    err = _listener.error or ""
+    if "10048" in err or "in use" in err.lower() or "98" in err[:12]:
+        time.sleep(1)                         # a socket of our own may still be closing: one retry
+        _listener = Listener()
+        _listener.start()
+        _listener.ready.wait(2)
+    if listener_running():
+        setattr(sublime, _REGISTRY, _listener)
     return listener_running()
 
 
@@ -445,6 +470,8 @@ def stop_listener():
     if _listener is not None:
         l, _listener = _listener, None
         l.stop()
+        if getattr(sublime, _REGISTRY, None) is l:
+            setattr(sublime, _REGISTRY, None)
 
 
 def ensure_listener(window, seconds=None):
@@ -483,6 +510,8 @@ def expect_answer(delta):
 
 
 def plugin_loaded():
+    stop_orphan()                             # a listener left behind by a previous instance of this module (reload)
+
     def go():
         if setting(sublime.active_window(), "listener") == "always":
             start_listener()

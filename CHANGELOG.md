@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1
+
+* Listener: a plugin reload no longer leaves an orphaned listener holding port 39998; the new instance stops it and takes
+  over. A failed bind ("address in use") is retried once.
+
 ## 1.0.0
 
 First release.
