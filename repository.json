@@ -2,7 +2,12 @@
     "$schema": "sublime://packagecontrol.io/schemas/repository",
     "schema_version": "4.0.0",
     "packages": [
-        "https://github.com/wunditta"
+        {
+            "name": "Tabletop Simulator Editor",
+            "details": "https://github.com/wunditta/sublime-tabletop-simulator-editor",
+            "labels": ["tabletop simulator", "lua", "game"],
+            "releases": [{"sublime_text": ">=3000", "tags": true}]
+        }
     ],
     "libraries": []
 }
